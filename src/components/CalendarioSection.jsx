@@ -1,78 +1,73 @@
-import { useState, useMemo, useEffect } from "react";
-import { Plus, Trash2, Check, ChevronLeft, ChevronRight, CalendarDays, Users } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Plus, Trash2, Check, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { uid, todayISO, formatDateItLong, buildMonthMatrix } from "../lib/helpers";
-import { MEMBERS, MEMBER_COLOR, APPT_COLOR, WEEKDAYS, MONTHS_IT } from "../lib/constants";
+import { APPT_COLOR, WEEKDAYS, MONTHS_IT } from "../lib/constants";
 
-export default function CalendarioSection({ clients, tasks, setTasks }) {
-  const [activeView, setActiveView] = useState("Generale");
+export default function CalendarioSection({ clients, setClients }) {
   const [viewDate, setViewDate] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState(todayISO());
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftMember, setDraftMember] = useState(MEMBERS[0]);
+  const [draftClientId, setDraftClientId] = useState(clients[0]?.id || "");
+  const [draftTime, setDraftTime] = useState("");
   const [draftNote, setDraftNote] = useState("");
 
-  useEffect(() => {
-    if (MEMBERS.includes(activeView)) setDraftMember(activeView);
-  }, [activeView]);
+  const visibleClients = useMemo(() => clients.filter((c) => !c.hidden), [clients]);
 
-  const clientAppointments = useMemo(() => {
-    return (clients || [])
-      .filter((c) => !c.hidden && c.appointmentDate)
-      .map((c) => ({ clientId: c.id, name: c.name || "Cliente senza nome", date: c.appointmentDate }));
-  }, [clients]);
+  // Elenco piatto di tutti gli appuntamenti di tutti i clienti, con riferimento al cliente.
+  const allAppointments = useMemo(() => {
+    const list = [];
+    visibleClients.forEach((c) => {
+      (c.appointments || []).forEach((a) => {
+        list.push({ ...a, clientId: c.id, clientName: c.name || "Cliente senza nome" });
+      });
+    });
+    return list;
+  }, [visibleClients]);
 
-  function addTask() {
-    const title = draftTitle.trim();
-    if (!title) return;
-    const task = { id: uid(), date: selectedDate, member: draftMember, title, note: draftNote.trim(), done: false };
-    setTasks((prev) => [...prev, task]);
-    setDraftTitle("");
+  function addAppointment() {
+    if (!draftClientId) return;
+    const appt = { id: uid(), date: selectedDate, time: draftTime.trim(), note: draftNote.trim(), done: false };
+    setClients((prev) =>
+      prev.map((c) => (c.id === draftClientId ? { ...c, appointments: [...(c.appointments || []), appt] } : c))
+    );
+    setDraftTime("");
     setDraftNote("");
   }
 
-  function toggleDone(taskId) {
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, done: !t.done } : t)));
+  function toggleApptDone(clientId, apptId) {
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === clientId
+          ? { ...c, appointments: (c.appointments || []).map((a) => (a.id === apptId ? { ...a, done: !a.done } : a)) }
+          : c
+      )
+    );
   }
 
-  function deleteTask(taskId) {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
-  }
-
-  function updateTask(taskId, patch) {
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...patch } : t)));
+  function deleteAppointment(clientId, apptId) {
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === clientId ? { ...c, appointments: (c.appointments || []).filter((a) => a.id !== apptId) } : c
+      )
+    );
   }
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   const weeks = useMemo(() => buildMonthMatrix(year, month), [year, month]);
 
-  const tasksForView = useMemo(() => {
-    return activeView === "Generale" ? tasks : tasks.filter((t) => t.member === activeView);
-  }, [tasks, activeView]);
-
-  const tasksByDate = useMemo(() => {
-    const map = {};
-    tasksForView.forEach((t) => {
-      if (!map[t.date]) map[t.date] = [];
-      map[t.date].push(t);
-    });
-    return map;
-  }, [tasksForView]);
-
   const apptsByDate = useMemo(() => {
     const map = {};
-    if (activeView !== "Generale") return map;
-    clientAppointments.forEach((a) => {
+    allAppointments.forEach((a) => {
       if (!map[a.date]) map[a.date] = [];
       map[a.date].push(a);
     });
+    Object.values(map).forEach((arr) => arr.sort((a, b) => (a.time || "").localeCompare(b.time || "")));
     return map;
-  }, [clientAppointments, activeView]);
+  }, [allAppointments]);
 
-  const selectedTasks = tasksByDate[selectedDate] || [];
   const selectedAppts = apptsByDate[selectedDate] || [];
 
   function goToday() {
@@ -87,26 +82,6 @@ export default function CalendarioSection({ clients, tasks, setTasks }) {
 
   return (
     <div className="cal-wrap">
-      <div className="tabs">
-        {MEMBERS.map((m) => (
-          <button
-            key={m}
-            className={`tab ${activeView === m ? "active" : ""}`}
-            style={activeView === m ? { borderColor: MEMBER_COLOR[m].color, color: MEMBER_COLOR[m].color } : undefined}
-            onClick={() => setActiveView(m)}
-          >
-            {m}
-          </button>
-        ))}
-        <button
-          className={`tab ${activeView === "Generale" ? "active" : ""}`}
-          style={activeView === "Generale" ? { borderColor: "#1F2328", color: "#1F2328" } : undefined}
-          onClick={() => setActiveView("Generale")}
-        >
-          <Users size={13} /> Generale
-        </button>
-      </div>
-
       <div className="month-nav">
         <button className="btn-icon-sm" onClick={() => shiftMonth(-1)}>
           <ChevronLeft size={16} />
@@ -129,11 +104,9 @@ export default function CalendarioSection({ clients, tasks, setTasks }) {
           </div>
         ))}
         {weeks.flat().map((cell) => {
-          const dayTasks = tasksByDate[cell.key] || [];
           const dayAppts = apptsByDate[cell.key] || [];
           const isToday = cell.key === todayISO();
           const isSelected = cell.key === selectedDate;
-          const membersPresent = Array.from(new Set(dayTasks.map((t) => t.member)));
           return (
             <button
               key={cell.key}
@@ -142,10 +115,8 @@ export default function CalendarioSection({ clients, tasks, setTasks }) {
             >
               <span className="cal-daynum">{cell.day}</span>
               <span className="cal-dots">
-                {membersPresent.slice(0, 3).map((m) => (
-                  <span key={m} className="cal-dot" style={{ background: MEMBER_COLOR[m].color }} />
-                ))}
                 {dayAppts.length > 0 && <span className="cal-dot cal-dot-appt" style={{ background: APPT_COLOR.color }} />}
+                {dayAppts.length > 1 && <span className="cal-count">{dayAppts.length}</span>}
               </span>
             </button>
           );
@@ -153,11 +124,6 @@ export default function CalendarioSection({ clients, tasks, setTasks }) {
       </div>
 
       <div className="legend">
-        {MEMBERS.map((m) => (
-          <span className="legend-item" key={m}>
-            <span className="legend-dot" style={{ background: MEMBER_COLOR[m].color }} /> {m}
-          </span>
-        ))}
         <span className="legend-item">
           <span className="legend-dot" style={{ background: APPT_COLOR.color }} /> Appuntamento cliente
         </span>
@@ -166,41 +132,24 @@ export default function CalendarioSection({ clients, tasks, setTasks }) {
       <div className="day-panel">
         <h3>{formatDateItLong(selectedDate)}</h3>
 
-        {selectedAppts.length > 0 && (
-          <div className="appt-list">
-            {selectedAppts.map((a) => (
-              <div className="appt-item" key={a.clientId}>
-                <CalendarDays size={13} />
-                Appuntamento con <strong>{a.name}</strong>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {selectedTasks.length === 0 ? (
-          <div className="empty-note">Nessun task per questo giorno.</div>
+        {selectedAppts.length === 0 ? (
+          <div className="empty-note">Nessun appuntamento per questo giorno.</div>
         ) : (
           <ul className="task-list">
-            {selectedTasks.map((t) => (
-              <li key={t.id} className={`task-item ${t.done ? "done" : ""}`}>
-                <button className="task-check" onClick={() => toggleDone(t.id)} title={t.done ? "Segna da fare" : "Segna fatto"}>
+            {selectedAppts.map((a) => (
+              <li key={a.id} className={`task-item appt-row ${a.done ? "done" : ""}`}>
+                <button
+                  className="task-check"
+                  onClick={() => toggleApptDone(a.clientId, a.id)}
+                  title={a.done ? "Segna da fare" : "Segna fatto"}
+                >
                   <Check size={13} />
                 </button>
-                <span className="task-member" style={{ color: MEMBER_COLOR[t.member].color, background: MEMBER_COLOR[t.member].bg }}>
-                  {t.member}
-                </span>
-                <input
-                  className="task-title-input"
-                  value={t.title}
-                  onChange={(e) => updateTask(t.id, { title: e.target.value })}
-                />
-                <input
-                  className="task-note-input"
-                  value={t.note}
-                  onChange={(e) => updateTask(t.id, { note: e.target.value })}
-                  placeholder="Nota…"
-                />
-                <button className="btn-icon-sm" onClick={() => deleteTask(t.id)} title="Elimina">
+                <CalendarDays size={13} />
+                {a.time && <span className="appt-time">{a.time}</span>}
+                <strong>{a.clientName}</strong>
+                {a.note && <span className="task-note-static">{a.note}</span>}
+                <button className="btn-icon-sm" onClick={() => deleteAppointment(a.clientId, a.id)} title="Elimina">
                   <Trash2 size={13} />
                 </button>
               </li>
@@ -209,21 +158,18 @@ export default function CalendarioSection({ clients, tasks, setTasks }) {
         )}
 
         <div className="add-task-row">
-          <select className="cell-input add-member" value={draftMember} onChange={(e) => setDraftMember(e.target.value)}>
-            {MEMBERS.map((m) => (
-              <option key={m} value={m}>
-                {m}
+          <select className="cell-input add-member" value={draftClientId} onChange={(e) => setDraftClientId(e.target.value)}>
+            {visibleClients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name || "Senza nome"}
               </option>
             ))}
           </select>
           <input
-            className="cell-input add-title"
-            value={draftTitle}
-            onChange={(e) => setDraftTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") addTask();
-            }}
-            placeholder="Nuovo task per questo giorno…"
+            type="time"
+            className="cell-input"
+            value={draftTime}
+            onChange={(e) => setDraftTime(e.target.value)}
           />
           <input
             className="cell-input add-note"
@@ -231,8 +177,8 @@ export default function CalendarioSection({ clients, tasks, setTasks }) {
             onChange={(e) => setDraftNote(e.target.value)}
             placeholder="Nota (opzionale)"
           />
-          <button className="btn-primary" onClick={addTask}>
-            <Plus size={14} /> Aggiungi
+          <button className="btn-primary" onClick={addAppointment}>
+            <Plus size={14} /> Aggiungi appuntamento
           </button>
         </div>
       </div>

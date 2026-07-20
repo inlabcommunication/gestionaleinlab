@@ -1,9 +1,9 @@
 import {
   Plus, Trash2, Eye, EyeOff, ExternalLink, ChevronLeft,
-  CalendarDays, CreditCard, FileText, FolderOpen,
-  Link as LinkIcon, TrendingUp,
+  CreditCard, FileText, FolderOpen,
+  Link as LinkIcon, TrendingUp, Receipt, Check,
 } from "lucide-react";
-import { lastReadyOrRecent, colorForStatus, formatDateIt, withFallback } from "../lib/helpers";
+import { lastReadyOrRecent, colorForStatus, formatDateIt, withFallback, nextInvoiceDate, invoicePeriodKey, todayISO } from "../lib/helpers";
 import GrowthPanel from "./GrowthPanel";
 import AlertsPanel from "./AlertsPanel";
 
@@ -26,6 +26,11 @@ export default function ClientDetail({
   onAddEvent,
   onUpdateEvent,
   onDeleteEvent,
+  onAddAppointment,
+  onUpdateAppointment,
+  onDeleteAppointment,
+  onMarkInvoiceDone,
+  onRequestAppointment,
   onAddActivity,
   onUpdateActivity,
   onDeleteActivity,
@@ -38,6 +43,19 @@ export default function ClientDetail({
   const isMonthView = monthFilter !== "tutti";
   const slotsFilled = rows.length;
   const atCapacity = isMonthView && slotsWanted > 0 && slotsFilled >= slotsWanted;
+  const invoiceDate = nextInvoiceDate(client);
+  const invoicePeriod = invoiceDate ? invoicePeriodKey(client, invoiceDate) : null;
+  const invoiceDone = invoicePeriod ? !!(client.invoicesDone && client.invoicesDone[invoicePeriod]) : false;
+
+  function handleAddAppointment() {
+    onAddAppointment({
+      id: Math.random().toString(36).slice(2, 10),
+      date: todayISO(),
+      time: "",
+      note: "",
+      done: false,
+    });
+  }
 
   function handleDeleteOrClear(row) {
     if (isMonthView && slotsWanted > 0 && slotsFilled <= slotsWanted) {
@@ -148,14 +166,23 @@ export default function ClientDetail({
 
         <div className="info-card">
           <div className="info-label">
-            <CalendarDays size={14} /> Prossimo appuntamento
+            <Receipt size={14} /> Fattura / pagamento
           </div>
-          <input
-            className="info-input"
-            type="date"
-            value={client.appointmentDate}
-            onChange={(e) => onUpdate({ appointmentDate: e.target.value })}
-          />
+          {invoiceDate ? (
+            <div className="invoice-box">
+              <span className={`invoice-date ${invoiceDone ? "done" : ""}`}>
+                Scadenza {formatDateIt(invoiceDate)}
+              </span>
+              <button
+                className={`btn-ghost small ${invoiceDone ? "active" : ""}`}
+                onClick={() => onMarkInvoiceDone(invoicePeriod)}
+              >
+                <Check size={13} /> {invoiceDone ? "Fatto" : "Segna fatto"}
+              </button>
+            </div>
+          ) : (
+            <div className="empty-note">Imposta importo e giorno nel pagamento qui sopra.</div>
+          )}
         </div>
 
         <div className="info-card">
@@ -211,6 +238,64 @@ export default function ClientDetail({
       <GrowthPanel client={client} onAddStat={onAddStat} onUpdateStat={onUpdateStat} onDeleteStat={onDeleteStat} />
 
       <AlertsPanel client={client} />
+
+      <div className="events-section appointments-section">
+        <div className="events-head">
+          <h3>Appuntamenti</h3>
+          <button className="btn-primary" onClick={handleAddAppointment}>
+            <Plus size={14} /> Aggiungi appuntamento
+          </button>
+        </div>
+        {(!client.appointments || client.appointments.length === 0) ? (
+          <div className="empty-note">
+            Nessun appuntamento in programma.{" "}
+            {client.needsAppointment ? (
+              <span className="mini-pill">Richiesto a Nico</span>
+            ) : (
+              <button className="btn-ghost small" onClick={onRequestAppointment}>
+                Richiedi appuntamento a Nico
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="events-list">
+            {[...client.appointments]
+              .sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")))
+              .map((a) => (
+                <div className={`event-row appt-edit-row ${a.done ? "done" : ""}`} key={a.id}>
+                  <input
+                    type="date"
+                    className="cell-input event-date"
+                    value={a.date}
+                    onChange={(e) => onUpdateAppointment(a.id, { date: e.target.value })}
+                  />
+                  <input
+                    type="time"
+                    className="cell-input"
+                    value={a.time || ""}
+                    onChange={(e) => onUpdateAppointment(a.id, { time: e.target.value })}
+                  />
+                  <input
+                    className="cell-input event-name"
+                    value={a.note || ""}
+                    onChange={(e) => onUpdateAppointment(a.id, { note: e.target.value })}
+                    placeholder="Nota (opzionale)"
+                  />
+                  <button
+                    className="btn-icon-sm"
+                    onClick={() => onUpdateAppointment(a.id, { done: !a.done })}
+                    title={a.done ? "Segna da fare" : "Segna fatto"}
+                  >
+                    <Check size={13} />
+                  </button>
+                  <button className="btn-icon-sm" onClick={() => onDeleteAppointment(a.id)} title="Elimina appuntamento">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
 
       <div className="activities-section">
         <div className="events-head">

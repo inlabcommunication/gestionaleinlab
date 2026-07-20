@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { Plus, Settings, EyeOff, Users } from "lucide-react";
-import { uid, todayISO, daysSince, formatDateIt, lastReadyOrRecent, blankClient } from "../lib/helpers";
+import { uid, todayISO, daysSince, formatDateIt, lastReadyOrRecent, blankClient, nextAppointment } from "../lib/helpers";
 import StampBadge from "./StampBadge";
 import ClientDetail from "./ClientDetail";
 import SettingsModal from "./SettingsModal";
@@ -138,6 +138,44 @@ export default function ClientiSection({ clients, setClients, config, setConfig 
     );
   }
 
+  function addAppointment(clientId, appt) {
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === clientId ? { ...c, appointments: [...(c.appointments || []), appt], needsAppointment: false } : c
+      )
+    );
+  }
+
+  function updateAppointment(clientId, apptId, patch) {
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === clientId
+          ? { ...c, appointments: (c.appointments || []).map((a) => (a.id === apptId ? { ...a, ...patch } : a)) }
+          : c
+      )
+    );
+  }
+
+  function deleteAppointment(clientId, apptId) {
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === clientId ? { ...c, appointments: (c.appointments || []).filter((a) => a.id !== apptId) } : c
+      )
+    );
+  }
+
+  function markInvoiceDone(clientId, period) {
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === clientId ? { ...c, invoicesDone: { ...(c.invoicesDone || {}), [period]: true } } : c
+      )
+    );
+  }
+
+  function requestAppointment(clientId) {
+    setClients((prev) => prev.map((c) => (c.id === clientId ? { ...c, needsAppointment: true } : c)));
+  }
+
   function addEvent(clientId) {
     const ev = { id: uid(), name: "", date: "" };
     setClients((prev) => prev.map((c) => (c.id === clientId ? { ...c, events: [...(c.events || []), ev] } : c)));
@@ -226,7 +264,8 @@ export default function ClientiSection({ clients, setClients, config, setConfig 
           )}
           {visibleClients.map((c) => {
             const last = lastReadyOrRecent(c.editorial);
-            const appt = daysSince(c.appointmentDate);
+            const appt = nextAppointment(c);
+            const apptDays = appt ? daysSince(appt.date) : null;
             return (
               <button
                 key={c.id}
@@ -246,8 +285,8 @@ export default function ClientiSection({ clients, setClients, config, setConfig 
                   ) : (
                     <span className="stamp stamp-empty">Nessun contenuto</span>
                   )}
-                  {c.appointmentDate && appt !== null && appt >= -1 && appt <= 7 && (
-                    <span className="mini-pill">Appuntamento {formatDateIt(c.appointmentDate)}</span>
+                  {appt && apptDays !== null && apptDays >= -1 && apptDays <= 7 && (
+                    <span className="mini-pill">Appuntamento {formatDateIt(appt.date)}</span>
                   )}
                 </div>
               </button>
@@ -286,6 +325,11 @@ export default function ClientiSection({ clients, setClients, config, setConfig 
             onAddEvent={() => addEvent(selected.id)}
             onUpdateEvent={(eventId, patch) => updateEvent(selected.id, eventId, patch)}
             onDeleteEvent={(eventId) => deleteEvent(selected.id, eventId)}
+            onAddAppointment={(appt) => addAppointment(selected.id, appt)}
+            onUpdateAppointment={(apptId, patch) => updateAppointment(selected.id, apptId, patch)}
+            onDeleteAppointment={(apptId) => deleteAppointment(selected.id, apptId)}
+            onMarkInvoiceDone={(period) => markInvoiceDone(selected.id, period)}
+            onRequestAppointment={() => requestAppointment(selected.id)}
             onAddActivity={() => addActivity(selected.id)}
             onUpdateActivity={(activityId, patch) => updateActivity(selected.id, activityId, patch)}
             onDeleteActivity={(activityId) => deleteActivity(selected.id, activityId)}
