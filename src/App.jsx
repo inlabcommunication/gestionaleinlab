@@ -2,19 +2,27 @@ import { useState, useEffect, useRef } from "react";
 import TopBar from "./components/TopBar";
 import ClientiSection from "./components/ClientiSection";
 import CalendarioSection from "./components/CalendarioSection";
-import { ensureSignedIn } from "./firebase";
+import Login from "./components/Login";
+import { watchAuth } from "./firebase";
 import { dbGet, dbSet } from "./lib/storage";
 import { CLIENTS_KEY, CONFIG_KEY, TASKS_KEY, DEFAULT_CONFIG } from "./lib/constants";
 import { exampleClient } from "./lib/helpers";
 
 export default function App() {
+  // user: undefined = sto ancora controllando; null = non loggato; oggetto = loggato
+  const [user, setUser] = useState(undefined);
   const [clients, setClients] = useState(null);
   const [config, setConfig] = useState(null);
   const [tasks, setTasks] = useState(null);
   const [activeSection, setActiveSection] = useState("clienti");
   const [saveState, setSaveState] = useState("idle");
-  const [authError, setAuthError] = useState(null);
   const loadedOnce = useRef(false);
+
+  // Ascolta lo stato di login (accesso / logout).
+  useEffect(() => {
+    const unsub = watchAuth((u) => setUser(u || null));
+    return unsub;
+  }, []);
 
   async function loadAll() {
     const rawClients = await dbGet(CLIENTS_KEY, null);
@@ -35,21 +43,15 @@ export default function App() {
     setTasks(rawTasks || []);
   }
 
+  // Carica i dati solo dopo che l'utente ha fatto login.
   useEffect(() => {
+    if (!user) return;
     (async () => {
-      try {
-        await ensureSignedIn();
-      } catch (e) {
-        setAuthError(
-          "Non riesco a collegarmi al database (controlla la configurazione Firebase in .env). Dettagli: " + e.message
-        );
-        return;
-      }
       await loadAll();
       loadedOnce.current = true;
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!loadedOnce.current || clients === null || config === null || tasks === null) return;
@@ -71,10 +73,20 @@ export default function App() {
     setSaveState("saved");
   }
 
-  if (authError) {
+  // Sto ancora verificando se c'e una sessione attiva.
+  if (user === undefined) {
     return (
       <div className="inlab-root">
-        <div className="loading" style={{ color: "#A5362F" }}>{authError}</div>
+        <div className="loading">Carico InLab…</div>
+      </div>
+    );
+  }
+
+  // Nessuno loggato: mostra la schermata di accesso.
+  if (user === null) {
+    return (
+      <div className="inlab-root">
+        <Login />
       </div>
     );
   }
@@ -83,10 +95,15 @@ export default function App() {
 
   return (
     <div className="inlab-root">
-      <TopBar activeSection={activeSection} setActiveSection={setActiveSection} onRefresh={refreshAll} />
+      <TopBar
+        activeSection={activeSection}
+        setActiveSection={setActiveSection}
+        onRefresh={refreshAll}
+        user={user}
+      />
 
       {!ready ? (
-        <div className="loading">Carico InLab…</div>
+        <div className="loading">Carico i dati…</div>
       ) : (
         <>
           <div style={{ display: activeSection === "clienti" ? "block" : "none" }}>
