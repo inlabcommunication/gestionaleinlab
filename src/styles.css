@@ -375,3 +375,60 @@ body {
   .add-task-row { flex-direction: column; }
   .add-member, .add-title, .add-note { width: 100%; }
 }
+/* ---- login ---- */
+.login-screen {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.login-card {
+  width: 100%; max-width: 380px;
+  background: #fff; border: 1px solid var(--line); border-radius: 14px;
+  padding: 28px 26px;
+}
+.login-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.login-title { font-family: 'Space Grotesk', sans-serif; font-size: 20px; margin: 0 0 18px; }
+.login-google {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+  border: 1px solid var(--line); background: #fff; border-radius: 8px;
+  padding: 11px 14px; font-size: 14px; font-weight: 500; cursor: pointer; color: var(--ink);
+}
+.login-google:hover { background: var(--paper-dim); }
+.login-google:disabled { opacity: 0.6; cursor: default; }
+.login-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 18px 0; color: var(--ink-soft); font-size: 12px;
+}
+.login-divider::before, .login-divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--line);
+}
+.login-form { display: flex; flex-direction: column; gap: 10px; }
+.login-input {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px;
+  padding: 11px 12px; font-size: 14px; font-family: inherit; color: var(--ink); background: var(--paper);
+}
+.login-input:focus { outline: none; border-color: var(--ink-soft); }
+.login-submit {
+  width: 100%; border: none; background: var(--ink); color: var(--paper);
+  border-radius: 8px; padding: 11px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.login-submit:hover { opacity: 0.9; }
+.login-submit:disabled { opacity: 0.6; cursor: default; }
+.login-error {
+  margin-top: 14px; font-size: 13px; color: var(--red);
+  background: #FBEAE8; border: 1px solid #E3C4C1; border-radius: 8px; padding: 9px 12px;
+}
+.login-switch { margin-top: 18px; font-size: 13px; color: var(--ink-soft); text-align: center; }
+.login-switch button {
+  border: none; background: none; color: var(--ink); font-weight: 600;
+  cursor: pointer; padding: 0; font-size: 13px; text-decoration: underline;
+}
+
+.topbar-user { display: flex; align-items: center; gap: 8px; }
+.topbar-email {
+  font-size: 12px; color: var(--ink-soft); max-width: 160px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .topbar-email { display: none; }
+}
