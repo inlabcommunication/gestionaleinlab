@@ -1,5 +1,13 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -27,26 +35,47 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Login anonimo: basta per tenere il database chiuso al resto di internet
-// (le regole Firestore richiedono un utente autenticato, vedi README).
-// Non distingue Giusi/Ilaria/Nico tra loro: è un cancello, non un login vero.
-export function ensureSignedIn() {
-  if (missingKeys.length > 0) {
-    return Promise.reject(
-      new Error(
-        `Configurazione Firebase incompleta (mancano: ${missingKeys.join(", ")}). ` +
-          "Controlla il file .env in locale o le Environment Variables su Vercel."
-      )
-    );
-  }
-  return new Promise((resolve, reject) => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      unsub();
-      if (user) {
-        resolve(user);
-      } else {
-        signInAnonymously(auth).then((cred) => resolve(cred.user)).catch(reject);
-      }
-    });
-  });
+const googleProvider = new GoogleAuthProvider();
+
+// Accedi con l'account Google (finestra popup). Un click, nessuna password.
+export function loginWithGoogle() {
+  return signInWithPopup(auth, googleProvider);
+}
+
+// Accedi con email e password (account gia esistente).
+export function loginWithEmail(email, password) {
+  return signInWithEmailAndPassword(auth, email, password);
+}
+
+// Crea un nuovo account con email e password (prima volta).
+export function registerWithEmail(email, password) {
+  return createUserWithEmailAndPassword(auth, email, password);
+}
+
+// Esci dall'account.
+export function logout() {
+  return signOut(auth);
+}
+
+// Rimane in ascolto dello stato di login: chiama callback(user) ogni volta che
+// l'utente accede o esce. user e null se nessuno e loggato.
+export function watchAuth(callback) {
+  return onAuthStateChanged(auth, callback);
+}
+
+// Traduce i codici di errore di Firebase in messaggi in italiano leggibili.
+export function authErrorMessage(code) {
+  const map = {
+    "auth/invalid-email": "Indirizzo email non valido.",
+    "auth/user-disabled": "Questo account e stato disabilitato.",
+    "auth/user-not-found": "Nessun account con questa email. Prova a registrarti.",
+    "auth/wrong-password": "Password errata.",
+    "auth/invalid-credential": "Email o password errate.",
+    "auth/email-already-in-use": "Esiste gia un account con questa email. Accedi invece di registrarti.",
+    "auth/weak-password": "La password deve avere almeno 6 caratteri.",
+    "auth/popup-closed-by-user": "Finestra di accesso chiusa prima di completare.",
+    "auth/popup-blocked": "Il browser ha bloccato la finestra di accesso. Consenti i popup e riprova.",
+    "auth/operation-not-allowed": "Questo metodo di accesso non e attivo su Firebase.",
+  };
+  return map[code] || "Si e verificato un errore durante l'accesso. Riprova.";
 }
