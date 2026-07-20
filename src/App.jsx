@@ -3,7 +3,9 @@ import TopBar from "./components/TopBar";
 import ClientiSection from "./components/ClientiSection";
 import CalendarioSection from "./components/CalendarioSection";
 import Login from "./components/Login";
-import { watchAuth } from "./firebase";
+import ChooseIdentity from "./components/ChooseIdentity";
+import TeamSettingsSection from "./components/TeamSettingsSection";
+import { watchAuth, isAuthorized } from "./firebase";
 import { dbGet, dbSet } from "./lib/storage";
 import { CLIENTS_KEY, CONFIG_KEY, TASKS_KEY, DEFAULT_CONFIG } from "./lib/constants";
 import { exampleClient } from "./lib/helpers";
@@ -11,6 +13,8 @@ import { exampleClient } from "./lib/helpers";
 export default function App() {
   // user: undefined = sto ancora controllando; null = non loggato; oggetto = loggato
   const [user, setUser] = useState(undefined);
+  // authorized: undefined = sto controllando; false = loggato ma senza accesso; true = dentro
+  const [authorized, setAuthorized] = useState(undefined);
   const [clients, setClients] = useState(null);
   const [config, setConfig] = useState(null);
   const [tasks, setTasks] = useState(null);
@@ -20,9 +24,21 @@ export default function App() {
 
   // Ascolta lo stato di login (accesso / logout).
   useEffect(() => {
-    const unsub = watchAuth((u) => setUser(u || null));
+    const unsub = watchAuth((u) => {
+      setUser(u || null);
+      if (!u) setAuthorized(undefined);
+    });
     return unsub;
   }, []);
+
+  // Dopo il login, controlla se questo account ha gia riscattato un codice invito.
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const ok = await isAuthorized(user.uid);
+      setAuthorized(ok);
+    })();
+  }, [user]);
 
   async function loadAll() {
     const rawClients = await dbGet(CLIENTS_KEY, null);
@@ -43,15 +59,15 @@ export default function App() {
     setTasks(rawTasks || []);
   }
 
-  // Carica i dati solo dopo che l'utente ha fatto login.
+  // Carica i dati solo dopo login E autorizzazione confermata.
   useEffect(() => {
-    if (!user) return;
+    if (!user || authorized !== true) return;
     (async () => {
       await loadAll();
       loadedOnce.current = true;
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, authorized]);
 
   useEffect(() => {
     if (!loadedOnce.current || clients === null || config === null || tasks === null) return;
@@ -91,6 +107,24 @@ export default function App() {
     );
   }
 
+  // Loggato, ma sto ancora controllando se ha un codice invito riscattato.
+  if (authorized === undefined) {
+    return (
+      <div className="inlab-root">
+        <div className="loading">Verifico l'accesso…</div>
+      </div>
+    );
+  }
+
+  // Loggato ma non ancora autorizzato: deve scegliere/creare il suo nome nel team.
+  if (authorized === false) {
+    return (
+      <div className="inlab-root">
+        <ChooseIdentity user={user} onAuthorized={() => setAuthorized(true)} />
+      </div>
+    );
+  }
+
   const ready = clients !== null && config !== null && tasks !== null;
 
   return (
@@ -111,6 +145,9 @@ export default function App() {
           </div>
           <div style={{ display: activeSection === "calendario" ? "block" : "none" }}>
             <CalendarioSection clients={clients} tasks={tasks} setTasks={setTasks} />
+          </div>
+          <div style={{ display: activeSection === "impostazioni" ? "block" : "none" }}>
+            <TeamSettingsSection />
           </div>
         </>
       )}
