@@ -1,6 +1,8 @@
 export const CLIENTS_KEY = "clienti";
 export const CONFIG_KEY = "config";
 export const TASKS_KEY = "calendario";
+export const ALERTS_DONE_KEY = "avvisiFatti";
+export const AUTO_DONE_KEY = "taskAutomaticiFatti";
 
 export const DEFAULT_CONFIG = {
   types: ["Foto", "Grafica", "Carosello", "Video"],
@@ -30,6 +32,13 @@ export const MEMBER_COLOR = {
   Nico: { color: "#5B4B8A", bg: "#E4DEF2" },
 };
 export const APPT_COLOR = { color: "#3A6B8A", bg: "#D9E6EE" };
+
+// Ruoli di riferimento per i task automatici (solo testo informativo in Impostazioni/Task).
+export const ROLE_HINTS = {
+  Giusi: "Pubblicazione e creazione grafiche",
+  Ilaria: "Montaggio e grafiche",
+  Nico: "Definizione contenuti, sponsorizzate, siti web, rapporti clienti e analisi mensili",
+};
 
 export const WEEKDAYS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 export const MONTHS_IT = [
