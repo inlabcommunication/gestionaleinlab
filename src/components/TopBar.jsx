@@ -1,6 +1,9 @@
-import { Users, CalendarDays, RefreshCw } from "lucide-react";
+import { Users, CalendarDays, RefreshCw, LogOut } from "lucide-react";
+import { logout } from "../firebase";
 
-export default function TopBar({ activeSection, setActiveSection, onRefresh }) {
+export default function TopBar({ activeSection, setActiveSection, onRefresh, user }) {
+  const label = user ? user.displayName || user.email : "";
+
   return (
     <div className="app-topbar">
       <div className="brand">
@@ -24,9 +27,15 @@ export default function TopBar({ activeSection, setActiveSection, onRefresh }) {
           <CalendarDays size={14} /> Calendario
         </button>
       </div>
-      <button className="btn-icon" onClick={onRefresh} title="Aggiorna dati">
-        <RefreshCw size={16} />
-      </button>
+      <div className="topbar-user">
+        {label && <span className="topbar-email" title={label}>{label}</span>}
+        <button className="btn-icon" onClick={onRefresh} title="Aggiorna dati">
+          <RefreshCw size={16} />
+        </button>
+        <button className="btn-icon" onClick={() => logout()} title="Esci">
+          <LogOut size={16} />
+        </button>
+      </div>
     </div>
   );
 }
