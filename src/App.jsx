@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import TopBar from "./components/TopBar";
+import HomeSection from "./components/HomeSection";
 import ClientiSection from "./components/ClientiSection";
 import CalendarioSection from "./components/CalendarioSection";
+import TaskSection from "./components/TaskSection";
 import Login from "./components/Login";
 import ChooseIdentity from "./components/ChooseIdentity";
 import TeamSettingsSection from "./components/TeamSettingsSection";
-import { watchAuth, isAuthorized } from "./firebase";
+import { watchAuth, isAuthorized, fetchTeamRoster } from "./firebase";
 import { dbGet, dbSet } from "./lib/storage";
-import { CLIENTS_KEY, CONFIG_KEY, TASKS_KEY, DEFAULT_CONFIG } from "./lib/constants";
-import { exampleClient } from "./lib/helpers";
+import { CLIENTS_KEY, CONFIG_KEY, TASKS_KEY, ALERTS_DONE_KEY, AUTO_DONE_KEY, DEFAULT_CONFIG, MEMBERS } from "./lib/constants";
+import { exampleClient, uid } from "./lib/helpers";
 
 export default function App() {
   // user: undefined = sto ancora controllando; null = non loggato; oggetto = loggato
@@ -18,7 +20,10 @@ export default function App() {
   const [clients, setClients] = useState(null);
   const [config, setConfig] = useState(null);
   const [tasks, setTasks] = useState(null);
-  const [activeSection, setActiveSection] = useState("clienti");
+  const [alertsDone, setAlertsDone] = useState(null);
+  const [autoDone, setAutoDone] = useState(null);
+  const [teamMembers, setTeamMembers] = useState(MEMBERS);
+  const [activeSection, setActiveSection] = useState("home");
   const [saveState, setSaveState] = useState("idle");
   const loadedOnce = useRef(false);
 
@@ -40,23 +45,48 @@ export default function App() {
     })();
   }, [user]);
 
+  // Migra un cliente "vecchio" (appointmentDate singolo) al nuovo modello con più appuntamenti.
+  function migrateClient(c) {
+    let next = c.lastEditorialUpdate ? c : { ...c, lastEditorialUpdate: new Date().toISOString() };
+    if (!next.events) next = { ...next, events: [] };
+    if (!next.activities) next = { ...next, activities: [] };
+    if (!next.monthlyStats) next = { ...next, monthlyStats: [] };
+    if (!next.appointments) {
+      const appointments = next.appointmentDate ? [{ id: uid(), date: next.appointmentDate, time: "", note: "", done: false }] : [];
+      next = { ...next, appointments };
+    }
+    if (next.appointmentDate !== undefined) {
+      const { appointmentDate, ...rest } = next;
+      next = rest;
+    }
+    if (!next.invoicesDone) next = { ...next, invoicesDone: {} };
+    if (next.needsAppointment === undefined) next = { ...next, needsAppointment: false };
+    return next;
+  }
+
   async function loadAll() {
     const rawClients = await dbGet(CLIENTS_KEY, null);
     const raw = rawClients || [exampleClient()];
-    const normalized = raw.map((c) => {
-      let next = c.lastEditorialUpdate ? c : { ...c, lastEditorialUpdate: new Date().toISOString() };
-      if (!next.events) next = { ...next, events: [] };
-      if (!next.activities) next = { ...next, activities: [] };
-      if (!next.monthlyStats) next = { ...next, monthlyStats: [] };
-      return next;
-    });
-    setClients(normalized);
+    setClients(raw.map(migrateClient));
 
     const rawConfig = await dbGet(CONFIG_KEY, null);
     setConfig(rawConfig || { ...DEFAULT_CONFIG });
 
     const rawTasks = await dbGet(TASKS_KEY, null);
     setTasks(rawTasks || []);
+
+    const rawAlertsDone = await dbGet(ALERTS_DONE_KEY, null);
+    setAlertsDone(rawAlertsDone || {});
+
+    const rawAutoDone = await dbGet(AUTO_DONE_KEY, null);
+    setAutoDone(rawAutoDone || {});
+
+    try {
+      const roster = await fetchTeamRoster();
+      if (roster && roster.length > 0) setTeamMembers(roster.map((r) => r.name));
+    } catch (e) {
+      // se non riesce a leggere il roster, resta sul default
+    }
   }
 
   // Carica i dati solo dopo login E autorizzazione confermata.
@@ -70,18 +100,24 @@ export default function App() {
   }, [user, authorized]);
 
   useEffect(() => {
-    if (!loadedOnce.current || clients === null || config === null || tasks === null) return;
+    if (!loadedOnce.current || clients === null || config === null || tasks === null || alertsDone === null || autoDone === null) return;
     setSaveState("saving");
     const t = setTimeout(async () => {
       try {
-        await Promise.all([dbSet(CLIENTS_KEY, clients), dbSet(CONFIG_KEY, config), dbSet(TASKS_KEY, tasks)]);
+        await Promise.all([
+          dbSet(CLIENTS_KEY, clients),
+          dbSet(CONFIG_KEY, config),
+          dbSet(TASKS_KEY, tasks),
+          dbSet(ALERTS_DONE_KEY, alertsDone),
+          dbSet(AUTO_DONE_KEY, autoDone),
+        ]);
         setSaveState("saved");
       } catch (e) {
         setSaveState("error");
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [clients, config, tasks]);
+  }, [clients, config, tasks, alertsDone, autoDone]);
 
   async function refreshAll() {
     setSaveState("saving");
@@ -125,26 +161,50 @@ export default function App() {
     );
   }
 
-  const ready = clients !== null && config !== null && tasks !== null;
+  const ready =
+    clients !== null && config !== null && tasks !== null && alertsDone !== null && autoDone !== null;
+
+  function toggleAlertDone(id) {
+    setAlertsDone((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  function toggleAutoDone(id) {
+    setAutoDone((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
 
   return (
     <div className="inlab-root">
-      <TopBar
-        activeSection={activeSection}
-        setActiveSection={setActiveSection}
-        onRefresh={refreshAll}
-        user={user}
-      />
+      <TopBar activeSection={activeSection} setActiveSection={setActiveSection} onRefresh={refreshAll} user={user} />
 
       {!ready ? (
         <div className="loading">Carico i dati…</div>
       ) : (
         <>
+          <div style={{ display: activeSection === "home" ? "block" : "none" }}>
+            <HomeSection
+              clients={clients}
+              alertsDone={alertsDone}
+              onToggleAlertDone={toggleAlertDone}
+              tasks={tasks}
+              setTasks={setTasks}
+              teamMembers={teamMembers}
+            />
+          </div>
           <div style={{ display: activeSection === "clienti" ? "block" : "none" }}>
             <ClientiSection clients={clients} setClients={setClients} config={config} setConfig={setConfig} />
           </div>
           <div style={{ display: activeSection === "calendario" ? "block" : "none" }}>
-            <CalendarioSection clients={clients} tasks={tasks} setTasks={setTasks} />
+            <CalendarioSection clients={clients} setClients={setClients} />
+          </div>
+          <div style={{ display: activeSection === "task" ? "block" : "none" }}>
+            <TaskSection
+              clients={clients}
+              tasks={tasks}
+              setTasks={setTasks}
+              autoDone={autoDone}
+              onToggleAutoDone={toggleAutoDone}
+              teamMembers={teamMembers}
+            />
           </div>
           <div style={{ display: activeSection === "impostazioni" ? "block" : "none" }}>
             <TeamSettingsSection />
