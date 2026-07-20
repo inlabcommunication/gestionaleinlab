@@ -11,6 +11,18 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+const missingKeys = Object.entries(firebaseConfig)
+  .filter(([, v]) => !v)
+  .map(([k]) => k);
+
+if (missingKeys.length > 0) {
+  console.error(
+    "Configurazione Firebase incompleta. Variabili mancanti:",
+    missingKeys,
+    "\nControlla il file .env in locale, oppure le Environment Variables su Vercel (e rifai il Deploy dopo averle aggiunte)."
+  );
+}
+
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
@@ -19,6 +31,14 @@ export const db = getFirestore(app);
 // (le regole Firestore richiedono un utente autenticato, vedi README).
 // Non distingue Giusi/Ilaria/Nico tra loro: è un cancello, non un login vero.
 export function ensureSignedIn() {
+  if (missingKeys.length > 0) {
+    return Promise.reject(
+      new Error(
+        `Configurazione Firebase incompleta (mancano: ${missingKeys.join(", ")}). ` +
+          "Controlla il file .env in locale o le Environment Variables su Vercel."
+      )
+    );
+  }
   return new Promise((resolve, reject) => {
     const unsub = onAuthStateChanged(auth, (user) => {
       unsub();
